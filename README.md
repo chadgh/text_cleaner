@@ -8,3 +8,5 @@ The python porter stemmer implementation used is from [this site](http://tartaru
 From that site:
 
 	All these encodings of the algorithm can be used free of charge for any purpose.
+
+Warning: I ran this on a 90MB text document and it took a while to run (about 6 minutes), took up one whole processor for that time and about 230MB. Future improvement might be to consider and improve the memory usage and processing time for cleaning even relatively large text documents.
