@@ -4,7 +4,7 @@ The command line tool could just be downloaded and used on the command line to c
 
 The stopword list include in minimal and simple.
 
-The python porter stemmer implementation used is from [this site]:(http://tartarus.org/~martin/PorterStemmer/index.html).
+The python porter stemmer implementation used is from [this site](http://tartarus.org/~martin/PorterStemmer/index.html).
 From that site:
 
 	All these encodings of the algorithm can be used free of charge for any purpose.
