@@ -1,41 +1,52 @@
 #!/usr/bin/python
+#-*- coding: utf-8 -*-
 import sys
 import string
 import re
 import json
 import operator
+import argparse
 from collections import defaultdict
-from optparse import OptionParser
 
-parser = OptionParser()
-parser.add_option("-j", "--json", action='store_true', default=False, dest="json", help="outputs in json format")
-parser.add_option("-c", "--counts", action='store_true', default=False, dest="counts", help="show word occurance counts")
-parser.add_option("-x", "--remove-stopwords", action='store_true', default=False, dest="stopwords", help="remove stopwords")
-parser.add_option("-L", "--leave-word-case", action='store_false', default=True, dest="lowercase", help="leave word case alone. Don't lowercase the words.")
-parser.add_option("-s", "--stem-words", action='store_true', default=False, dest="stemmed", help="stem the words (using a porter stemmer)")
-parser.add_option("-i", "--input-file", dest="inputfile", help="input file", metavar="FILE")
-parser.add_option("--stopword-file", dest="stopwordfile", help="use the specified file for stopwords. If this option in used the -x option is assumed.", metavar="FILE")
-parser.add_option("-W", "--sort-by-words", dest="sort_words", help="specifies sort by words", action='store_true', default=False)
-parser.add_option("-C", "--sort-by-counts", dest="sort_counts", help="specifies sort by counts", action='store_true', default=False)
-parser.add_option("-r", "--reverse-sort", dest="sort_reverse", help="reverse the sort", action='store_true', default=False)
-parser.add_option("-R", "--remove-count", dest="remove_count", help="remove words that don't occure more than NUM times (remove words where count <= NUM)", metavar="NUM")
-(options, args) = parser.parse_args()
+parser = argparse.ArgumentParser(prog='./text_cleaner.py', description="Cleans* text files. \n*cleaning means lowercasing, removing punctuation and stopwords, stemming, counting, sorting, and removing words with a low occurrence.")
+
+parser.add_argument('-o', '--output-format', dest='output_format', help='specifies output format. Default is a space between words. Options are: space, json, tab, newline.', metavar='[space|tab|newline|json]', default='space')
+
+parser.add_argument('-c', '--counts', action='store_true', default=False, dest='counts', help='show word occurrence (counts).')
+
+parser.add_argument('-L', '--line-mode', action='store_true', default=False, dest='line_mode', help='Output the words in line mode. Lines are preserved. Using this option nullifies the output format options specified.')
+
+parser.add_argument('-x', '--remove', dest='remove', default=[], nargs='+', help='removes one, many, or all of the following (whichever are specified): stopwords, punctuation, words, numbers. If "words" is specified for removal, then the --word-count or -w argument must also be given.', metavar='[stopwords,punctuation,words,numbers]')
+parser.add_argument("-w", "--word-count", dest="word_count", help="remove words that don't occur more than NUM times (remove words where count <= NUM)", metavar="NUM", type=int, default=0)
+parser.add_argument('--stopword-file', dest='stopword_file', help="use the specified file for stopwords. If this option in used the '--remove=stopword' option is assumed.", metavar="FILE")
+
+parser.add_argument('--dict-file', dest='dict_file', help="use the specified file for dictionary words. If this options is specified only words found in the dictionary will be used.", metavar="FILE")
+
+parser.add_argument('-l', '--lowercase', action='store_true', default=False, dest='lowercase', help='lowercase words.')
+parser.add_argument('-s', '--stem-words', action='store_true', default=False, dest='stem', help='stem the words (using a porter stemmer).')
+
+parser.add_argument("-i", "--input-file", dest="input_file", nargs='?', type=argparse.FileType('r'), default=sys.stdin, help="input file", metavar="FILE")
+
+parser.add_argument("-S", "--sort", dest="sort_by", help="sort output by [words|counts]", metavar='[words|counts]')
+parser.add_argument("-r", "--reverse-sort", dest="sort_reverse", help="reverse the sort", action='store_true', default=False)
+
+args = parser.parse_args()
 
 #stopwords
 stopwords = []
-if options.stopwordfile != None:
+if args.stopword_file != None:
 	"""TODO: Check to make sure the files exists"""
-	stopwords = [w.strip() for w in open(options.stopwordfile, 'r')]
-	options.stopwords = True
+	stopwords = [w.strip() for w in open(args.stopword_file, 'r')]
+	args.remove.append('stopwords')
 else:
 	stopwords = ['a', 'able', 'about', 'across', 'after', 'all', 'almost', 'also', 'am', 'among', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'because', 'been', 'but', 'by', 'can', 'cannot', 'could', 'dear', 'did', 'do', 'does', 'either', 'else', 'ever', 'every', 'for', 'from', 'get', 'got', 'had', 'has', 'have', 'he', 'her', 'hers', 'him', 'his', 'how', 'however', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'just', 'least', 'let', 'like', 'likely', 'may', 'me', 'might', 'most', 'must', 'my', 'neither', 'no', 'nor', 'not', 'of', 'off', 'often', 'on', 'only', 'or', 'other', 'our', 'own', 'rather', 'said', 'say', 'says', 'she', 'should', 'since', 'so', 'some', 'than', 'that', 'the', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'tis', 'to', 'too', 'twas', 'us', 'wants', 'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with', 'would', 'yet', 'you', 'your']
 
 
-#######################################################################################################
+##############################################################################################
 # Following is a porter stemmer implementation that was freely available on the internet.
 # I included this in this file to simplify the text_cleaner tool.
-#######################################################################################################
-##################################### START ###########################################################
+##############################################################################################
+##################################### START ##################################################
 """Porter Stemming Algorithm
 This is the Porter stemming algorithm, ported to Python from the
 version coded up in ANSI C by the author. It may be be regarded
@@ -378,75 +389,97 @@ class PorterStemmer:
 		self.step4()
 		self.step5()
 		return self.b[self.k0:self.k+1]
-######################################### END #############################################################
-###########################################################################################################
+######################################### END ################################################
+##############################################################################################
 
-#Input file or standard input
-#lowercase or not
-if options.inputfile != None:
-	if options.lowercase:
-		contentList = ["".join([c if c not in string.punctuation else ' ' for c in line.strip().lower()]) for line in open(options.inputfile, 'r')]
-	else:
-		contentList = ["".join([c if c not in string.punctuation else ' ' for c in line.strip()]) for line in open(options.inputfile, 'r')]
-else:
-	if options.lowercase:
-		contentList = ["".join([c if c not in string.punctuation else ' ' for c in line.strip().lower()]) for line in sys.stdin]
-	else:
-		contentList = ["".join([c if c not in string.punctuation else ' ' for c in line.strip()]) for line in sys.stdin]
+contentList = (line.strip().decode('utf-8').lower().encode('utf-8') if args.lowercase else line.strip().encode('utf-8') for line in args.input_file)
 
-#stem words and remove stopwords
-content = defaultdict(int)
 stemmer = PorterStemmer()
-for line in contentList:
-	words = line.split()
-	if options.stemmed and options.stopwords:
-		words = [stemmer.stemWord(w.strip()) for w in words if w.strip() != '' and w.strip() not in stopwords]
-	elif options.stemmed:
-		words = [stemmer.stemWord(w.strip()) for w in words if w.strip() != '' and w.strip()]
-	elif options.stopwords:
-		words = [w.strip() for w in words if w.strip() != '' and w.strip() not in stopwords]
-	else:
-		words = [w.strip() for w in words if w.strip() != '' and w.strip()]
+if args.dict_file is not None:
+	if 'stopwords' in args.remove and not args.stem:
+		dictionary = [w.strip().lower() if args.lowercase else w.strip() for w in open(args.dict_file, 'r') if w.strip() not in stopwords]
+	elif 'stopwords' in args.remove and args.stem:
+		dictionary = [stemmer.stemWord(w.strip().lower()) if args.lowercase else stemmer.stemWord(w.strip()) for w in open(args.dict_file, 'r') if w.strip() not in stopwords]
+	elif 'stopwords' not in args.remove and args.stem:
+		dictionary = [stemmer.stemWord(w.strip().lower()) if args.lowercase else stemmer.stemWord(w.strip()) for w in open(args.dict_file, 'r')]
+regex_punctuation_string = "!|\"|#|\$|%|&|'|\(|\)|\*|\+|,|-|\.|/|:|;|\<|\=|\>|\?|@|\[|\||\]|\^|_|`|{|\||}|~|¡|¿|—|–"
+punctuation = re.compile(regex_punctuation_string)
 
-	for word in words:
-		content[word] += 1
-
-#no numbers in words - remove words with low count
 words = {}
-for word, count in content.items():
-	if re.match(r'^([a-zA-Z])+$', word): #just words
-		if options.remove_count != None and count > int(options.remove_count):
-			words[word] = count
-		elif options.remove_count == None:
-			words[word] = count
+if args.line_mode:
+	lines = []
+#cleanup
+for line in contentList:
+	if line == '': continue
+
+	if 'punctuation' in args.remove:
+		line = punctuation.sub(' ', line)
+
+	if 'stopwords' in args.remove and not args.stem:
+		line = " ".join([w.strip() for w in line.split() if w.strip() != '' and w.strip() not in stopwords])
+	elif 'stopwords' in args.remove and args.stem:
+		line = " ".join([stemmer.stemWord(w.strip()) for w in line.split() if w.strip() != '' and w.strip() not in stopwords])
+	elif 'stopwords' not in args.remove and args.stem:
+		line = " ".join([stemmer.stemWord(w.strip()) for w in line.split() if w.strip() != ''])
+	
+	if args.line_mode:
+		newline = []
+		for word in line.split():
+			if 'numbers' in args.remove and re.search(r'\d', word):
+				continue
+			if (args.dict_file is None) or (args.dict_file is not None and word in dictionary):
+				newline.append(word)
+		if newline.__len__() > 0:
+			lines.append(" ".join(newline))
+	else:
+		for word in line.split():
+			if 'numbers' in args.remove and re.search(r'\d', word):
+				continue
+			if (args.dict_file is None) or (args.dict_file is not None and word in dictionary):
+				words[word] = words.get(word, 0) + 1
+
+if 'words' in args.remove and args.word_count > 0 and not args.line_mode:
+	newwords = {}
+	for word,count in words.items():
+		if count > args.word_count:
+			newwords[word] = count
+	words = newwords
 
 #sort
-if options.sort_words or options.sort_counts:
-	if options.sort_counts:
-		if options.sort_reverse:
-			sorted_words = sorted(words.iteritems(), key=operator.itemgetter(1), reverse=True)
-		else:
-			sorted_words = sorted(words.iteritems(), key=operator.itemgetter(1))
-	else:
-		if options.sort_reverse:
-			sorted_words = sorted(words.iteritems(), key=operator.itemgetter(0), reverse=True)
-		else:
-			sorted_words = sorted(words.iteritems(), key=operator.itemgetter(0))
-
+if args.sort_by is not None and not args.line_mode:
+	if 'counts' == args.sort_by and args.sort_reverse:
+		sorted_words = sorted(words.iteritems(), key=operator.itemgetter(1), reverse=True)
+	elif 'counts' == args.sort_by:
+		sorted_words = sorted(words.iteritems(), key=operator.itemgetter(1))
+	elif 'words' == args.sort_by and args.sort_reverse:
+		sorted_words = sorted(words.iteritems(), key=operator.itemgetter(0), reverse=True)
+	else: # should be words and not reverse
+		sorted_words = sorted(words.iteritems(), key=operator.itemgetter(0))
 	words = sorted_words
-else:
+elif not args.line_mode:
 	words = words.items()
 
 #output
-if options.json:
-	if options.counts:
-		sys.stdout.write(json.dumps(words))
-	else:
-		sys.stdout.write(json.dumps([w for w,c in words]))
+if args.line_mode:
+	for line in lines:
+		sys.stdout.write(line.strip() + "\n")
 else:
-	if options.counts:
+	sep = ' '
+	if args.output_format == 'tab':
+		sep = "\t"
+	elif args.output_format == 'newline':
+		sep = "\n"
+
+	if args.counts and args.output_format == 'json':
+		sys.stdout.write(json.dumps(words))
+	elif args.counts:
 		for word, count in words:
-			sys.stdout.write(word + " " + str(count) + "\n")
+			sys.stdout.write(word + ',' + str(count) + sep)
+	elif args.output_format == 'json':
+		sys.stdout.write(json.dumps([w for w,c in words]))
 	else:
 		for word, count in words:
-			sys.stdout.write(word + "\n")
+			sys.stdout.write(word + sep)
+
+	if args.output_format != 'newline':
+		sys.stdout.write("\n")
