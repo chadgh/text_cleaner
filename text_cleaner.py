@@ -391,18 +391,25 @@ class PorterStemmer:
 		return self.b[self.k0:self.k+1]
 ######################################### END ################################################
 ##############################################################################################
+def getDictionary(args):
+	dictionary = set([])
+	if 'stopwords' in args.remove and not args.stem:
+		dictionary = set([w.strip().lower() if args.lowercase else w.strip() for w in open(args.dict_file, 'r') if w.strip() not in stopwords])
+	elif 'stopwords' in args.remove and args.stem:
+		dictionary = set([stemmer.stemWord(w.strip().lower()) if args.lowercase else stemmer.stemWord(w.strip()) for w in open(args.dict_file, 'r') if w.strip() not in stopwords])
+	elif 'stopwords' not in args.remove and args.stem:
+		dictionary = set([stemmer.stemWord(w.strip().lower()) if args.lowercase else stemmer.stemWord(w.strip()) for w in open(args.dict_file, 'r')])
+	else:
+		dictionary = set([w.strip().lower() if args.lowercase else w.strip() for w in open(args.dict_file, 'r')])
+	return dictionary
 
-contentList = (line.strip().decode('utf-8').lower().encode('utf-8') if args.lowercase else line.strip().encode('utf-8') for line in args.input_file)
+contentList = (line.strip().lower() if args.lowercase else line.strip() for line in args.input_file)
 
 stemmer = PorterStemmer()
 if args.dict_file is not None:
-	if 'stopwords' in args.remove and not args.stem:
-		dictionary = [w.strip().lower() if args.lowercase else w.strip() for w in open(args.dict_file, 'r') if w.strip() not in stopwords]
-	elif 'stopwords' in args.remove and args.stem:
-		dictionary = [stemmer.stemWord(w.strip().lower()) if args.lowercase else stemmer.stemWord(w.strip()) for w in open(args.dict_file, 'r') if w.strip() not in stopwords]
-	elif 'stopwords' not in args.remove and args.stem:
-		dictionary = [stemmer.stemWord(w.strip().lower()) if args.lowercase else stemmer.stemWord(w.strip()) for w in open(args.dict_file, 'r')]
-regex_punctuation_string = "!|\"|#|\$|%|&|'|\(|\)|\*|\+|,|-|\.|/|:|;|\<|\=|\>|\?|@|\[|\||\]|\^|_|`|{|\||}|~|¡|¿|—|–"
+	dictionary = getDictionary(args)
+
+regex_punctuation_string = "!|\"|#|\$|%|&|'|\(|\)|\*|\+|,|-|\.|/|:|;|\<|\=|\>|\?|@|\[|\||\]|\^|_|`|{|\||}|~|¡|¿|—|–|…|�|”|“|‘|’|´|¯|•|→"
 punctuation = re.compile(regex_punctuation_string)
 
 words = {}
@@ -427,7 +434,7 @@ for line in contentList:
 		for word in line.split():
 			if 'numbers' in args.remove and re.search(r'\d', word):
 				continue
-			if (args.dict_file is None) or (args.dict_file is not None and word in dictionary):
+			elif args.dict_file is None or word in dictionary:
 				newline.append(word)
 		if newline.__len__() > 0:
 			lines.append(" ".join(newline))
@@ -435,7 +442,7 @@ for line in contentList:
 		for word in line.split():
 			if 'numbers' in args.remove and re.search(r'\d', word):
 				continue
-			if (args.dict_file is None) or (args.dict_file is not None and word in dictionary):
+			elif args.dict_file is None or word in dictionary:
 				words[word] = words.get(word, 0) + 1
 
 if 'words' in args.remove and args.word_count > 0 and not args.line_mode:
@@ -462,7 +469,7 @@ elif not args.line_mode:
 #output
 if args.line_mode:
 	for line in lines:
-		sys.stdout.write(line.strip() + "\n")
+		sys.stdout.write(line + "\n")
 else:
 	sep = ' '
 	if args.output_format == 'tab':
