@@ -1,8 +1,9 @@
+#text_cleaner
 I have written tools like this several times now and finally decided to do it one more time. This time, however, the tool is reusable and robust.
 
 The command line tool could just be downloaded and used on the command line to clean text documents. The options displayed with `text_cleaner.py -h` will give you the information you need to know how to use this utility.
 
-The stopword list included in minimal and simple.
+The stopword list included by default is minimal.
 
 The python porter stemmer implementation used is from [this site](http://tartarus.org/~martin/PorterStemmer/index.html).
 From that site:
