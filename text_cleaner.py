@@ -1,6 +1,6 @@
 #!/usr/bin/python2
 #-*- coding: utf-8 -*-
-""""""
+"""Provide text cleaning helper functionality."""
 
 import sys
 import string
@@ -11,65 +11,154 @@ import argparse
 from collections import defaultdict
 
 
-class Words:
-	"""This class handles the loading of stopword lists and the removal of stopwords, punctuation, or making sure the words in a string are found in a dictionary."""
+class Remover:
+	"""Removes things from string (or text).
+	
+	public interface:
+	* __init__ -- takes up to three optional filenames to define the stopwords,
+		punctuation, or dictionary words (valid words) to be used by the
+		rest of the methods.
+	* removeStopwords -- uses the Remover._stopwords list to remove any matching
+		words in the given string.
+	* removeStopwordsLine -- does the same as removeStopwords, but performs the
+		operation on a list of 'lines' (strings) and returns a list of 
+		stopword removed 'lines' (string).
+	* removePunctuation -- removes punctuation, defined in 
+		Remover._punctuation, from a given string.
+	* removePunctuationLine -- does the same as removePunctuation, but performs
+		the operation on a list of 'lines' (strings) and returns a list of
+		punctuation removed 'lines' (strings).
+	* removeNonDictionaryWords -- remove words from a string that are not in 
+		Remove._dictionary.
+	* removeNonDictionaryWordsLine -- does same as removeNonDictionaryWords, but
+		on lists of strings.
+	* removeNumbers -- removes numbers from a string.
+	* removeNumbersLine -- same as removeNumbers, but performs operation on a 
+		list of strings.
+	* removeExtraSpaces -- removes extra spaces from a string.
+	* removeExtraSpacesLine -- same as above, but on a list of strings.
+	* removeArticlesFromFront -- remove articles, defined in Remover._articles,
+		from the front of a string.
+	* removeTags -- remove tags from a string.
+	* removeTagsLine -- same as above but performed on a list of strings.
+	* removeApostrophes -- remove apostrophes and replace with nothing.
+	* removeApostrophesLine -- same as above but performed on list of strings.
 
-	stopwords = set()
-	dictionary = set()
-	punctuation = r''
-	def __init__(self, stopwordsfile = '', dictionaryfile = '', punctuationfile = ''):
+	Changable parameters:
+	_stopwords - list of stopwords (lowercase)
+	_dictionary - list of dictionary words (lowercase)
+	_punctuation - list of punctuation
+	_articles - list of articles that should be removed (lowercase)
+	_apostrophe - list of characters that represent an apostrophe
+
+	Callable methods:
+	_doPerLine -- perform removal operation on multiple lines.
+	_compileRegex -- compile or recompile regex used in some removal processes.
+	"""
+
+	_stopwords = set()
+	_dictionary = set()
+	_punctuation = []
+	_articles = []
+	_apostrophe = []
+
+	__articlesRegex = r''
+	__puncutationRegex = r''
+	__apostropheRegex = r''
+
+	def __init__(self, stopwordsfile='', 
+						punctuationfile='', 
+						dictionaryfile='',
+						apostrophefile='',
+						articlefile=''):
+		"""Get a new Remover instance.
+		
+		Params:
+		[stopwordsfile] - path to file defining a list of the stopwords to be
+				used.
+		[punctuationfile] - path to file defining the list of punctuation to
+				be removed from strings.
+		[dictionaryfile] - path to file defining a list of valid words.
+		[apostrophefile] - path to file defining characters that should be used
+				as apostrophe.
+		[articlefile] - path to file defining words to be used as articles.
+		"""
+
+		self._stopwords = set(['a', 'able', 'about', 'across', 'after', 
+								'all', 'almost', 'also', 'am', 'among', 'an', 
+								'and', 'any', 'are', 'as', 'at', 'be', 
+								'because', 'been', 'but', 'by', 'can', 
+								'cannot', 'could', 'dear', 'did', 'do', 'does',
+								'either', 'else', 'ever', 'every', 'for', 
+								'from', 'get', 'got', 'had', 'has', 'have', 
+								'he', 'her', 'hers', 'him', 'his', 'how', 
+								'however', 'i', 'if', 'in', 'into', 'is', 'it',
+								'its', 'just', 'least', 'let', 'like', 
+								'likely', 'may', 'me', 'might', 'most', 'must',
+								'my', 'neither', 'no', 'nor', 'not', 'of', 
+								'off', 'often', 'on', 'only', 'or', 'other', 
+								'our', 'own', 'rather', 'said', 'say', 'says',
+								'she', 'should', 'since', 'so', 'some', 'than',
+								'that', 'the', 'their', 'them', 'then', 
+								'there', 'these', 'they', 'this', 'tis', 'to', 
+								'too', 'twas', 'us', 'wants', 'was', 'we', 
+								'were', 'what', 'when', 'where', 'which', 
+								'while', 'who', 'whom', 'why', 'will', 'with', 
+								'would', 'yet', 'you', 'your'])
+
+		self._punctuation = ['!', "\"", '#', '\$','%','&',"'",'\(','\)','\*','\+',
+						',', '-','\.','/',"\\\\",':',';','\<','\=','\>','\?',
+						'@','\[', '\|','\]','\^','_','`','{','}','~','¡','¿',
+						'—','–','…','�', '”','“','‘','’','´','¯','•','→']
+		self._articles = ['a', 'an', 'and', 'the']
+		self._apostrophe = ["'", "‘","’"]
+
+
 		if stopwordsfile.strip() != '':
-			try:
-				self.stopwords = set([w.strip().lower() for w in open(filename, 'r')])
-			except IOError as e:
-				self.stopwords = set()
-		if len(self.stopwords) <= 0:
-			self.stopwords = set(['a', 'able', 'about', 'across', 'after', 'all', 'almost', 'also', 'am', 'among', 'an', 'and', 'any', 'are', 'as', 'at', 'be', 'because', 'been', 'but', 'by', 'can', 'cannot', 'could', 'dear', 'did', 'do', 'does', 'either', 'else', 'ever', 'every', 'for', 'from', 'get', 'got', 'had', 'has', 'have', 'he', 'her', 'hers', 'him', 'his', 'how', 'however', 'i', 'if', 'in', 'into', 'is', 'it', 'its', 'just', 'least', 'let', 'like', 'likely', 'may', 'me', 'might', 'most', 'must', 'my', 'neither', 'no', 'nor', 'not', 'of', 'off', 'often', 'on', 'only', 'or', 'other', 'our', 'own', 'rather', 'said', 'say', 'says', 'she', 'should', 'since', 'so', 'some', 'than', 'that', 'the', 'their', 'them', 'then', 'there', 'these', 'they', 'this', 'tis', 'to', 'too', 'twas', 'us', 'wants', 'was', 'we', 'were', 'what', 'when', 'where', 'which', 'while', 'who', 'whom', 'why', 'will', 'with', 'would', 'yet', 'you', 'your'])
+			self._stopwords = set([w.strip().lower() 
+									for w in open(stopwordsfile, 'r')])
 
 		if dictionaryfile.strip() != '':
-			try:
-				self.dictionary = set([w.strip().lower() for w in open(dictionaryfile, 'r')])
-			except IOError as  e:
-				self.dictionary = set()
-		if len(self.dictionary) <= 0:
-			self.dictionary = set([])
+			self._dictionary = set([w.strip().lower() 
+									for w in open(dictionaryfile, 'r')])
+
+		if articlefile.strip() != '':
+			self._articles = [w.strip() 
+							for w in open(articlefile, 'r').readlines()]
 
 		if punctuationfile.strip() != '':
-			try:
-				regex_punctuation_string = "|".join([w.strip() for w in open(punctuationfile, 'r').readlines()])
-				self.punctuation = re.compile(regex_punctuation_string)
-			except IOError as e:
-				self.punctuation = r''
-		if len(self.punctuation) <= 0:
-			regex_punctuation_string = "!|\"|#|\$|%|&|'|\(|\)|\*|\+|,|-|\.|/|\\\|:|;|\<|\=|\>|\?|@|\[|\||\]|\^|_|`|{|\||}|~|¡|¿|—|–|…|�|”|“|‘|’|´|¯|•|→"
-			self.punctuation = re.compile(regex_punctuation_string)
+			self._punctuation = [w.strip() 
+							for w in open(punctuationfile, 'r').readlines()]
+
+		if apostrophefile.strip() != '':
+			self._apostrophe = [w.strip() 
+							for w in open(apostrophefile, 'r').readlines()]
+
+		self._compileRegex()
 	
 	def removeStopwords(self, words):
-		"""removes stopwords from a string"""
+		"""Remove stopwords from string."""
 		wordList = [w.strip() for w in words.split(' ')]
 		rtnWords = []
 		for word in wordList:
-			if word.lower() not in self.stopwords:
+			if word.lower() not in self._stopwords:
 				rtnWords.append(word)
 		return " ".join(rtnWords)
 
 	def removeStopwordsLine(self, wordLines):
-		rtnLines = []
-		for line in wordLines:
-			rtnLines.append(self.removeStopwords(line))
-		return rtnLines
+		"""Remove stopwords from lines."""
+		return self._doPerLine(wordLines, self.removeStopwords)
 
 	def removePunctuation(self, words):
-		"""removes puntuation from a string"""
-		return self.punctuation.sub(' ', words)
+		"""Remove puntuation from string."""
+		return self.__punctuationRegex.sub(' ', words)
 
 	def removePunctuationLine(self, wordLines):
-		rtnLines = []
-		for line in wordLines:
-			rtnLines.append(self.removePunctuation(line))
-		return rtnLines
+		"""Remove puntuation from lines."""
+		return self._doPerLine(wordLines, self.removePunctuation)
 
 	def removeNonDictionaryWords(self, words):
+		"""Remove non valid (dictionary) words from string."""
 		wordList = [w.strip() for w in words.split(' ')]
 		rtnWords = []
 		for word in wordList:
@@ -78,26 +167,67 @@ class Words:
 		return " ".join(rtnWords)
 
 	def removeNonDictionaryWordsLine(self, wordLines):
-		rtnLines = []
-		for line in wordLines:
-			rtnLines.append(self.removeNonDictionaryWords(line))
-		return rtnLines
+		"""Remove non valid (dictionary) words from lines."""
+		return self._doPerLine(wordLines, self.removeNonDictionaryWords)
 
 	def removeNumbers(self, words):
-		"""removes numbers from a string"""
+		"""Remove numbers from string."""
 		return re.sub(r'\d', '', words)
 
 	def removeNumbersLine(self, wordLines):
+		"""Remove numbers from lines."""
+		return self._doPerLine(wordLines, self.removeNumbers)
+
+	def removeExtraSpaces(self, words):
+		"""Remove extra spaces from string."""
+		return re.sub(r'\s+', ' ', words.strip()).strip()
+
+	def removeExtraSpacesLine(self, wordLines):
+		"""Remove extra spaces from lines."""
+		return self._doPerLine(wordLines, self.removeExtraSpaces)
+
+	def removeArticlesFromFront(self, words):
+		"""Remove articles from the front of string."""
+		return self.__articlesRegex.sub('', words).strip()
+
+	def removeTags(self, words):
+		"""Remove html/xml tags from string."""
+		return re.sub(r'<.*?>', '', words)
+
+	def removeTagsLine(self, wordLines):
+		"""docstring for removeTagsLine"""
+		return self._doPerLine(wordLines, self.removeTags)
+
+	def removeApostrophes(self, words):
+		"""Remove apostrophes from string, replace with no space."""
+		return self.__apostropheRege.sub('', words)
+
+	def removeApostrophesLine(self, wordLines):
+		"""Remove apostrophes from string, replace with no space."""
+		return self._
+
+	# private interface
+	def _doPerLine(self, lines, function):
+		"""Perform operation (function) on each line in list."""
 		rtnLines = []
-		for line in wordLines:
-			rtnLines.append(self.removeNumbers(line))
+		for line in lines:
+			rtnLines.append(function(line))
 		return rtnLines
+
+	def _compileRegex(self):
+		"""Compile regular expressions for implementation."""
+		self.__punctuationRegex = re.compile("|".join(self._punctuation))
+		self.__apostropheRegex = re.compile('(?<=[a-zA-Z])('+
+									"|".join(self._apostrophe)+
+									')(?=[a-zA-Z])')
+		self.__articlesRegex = re.compile('(?i)^('+"|".join(self._articles)+')\s')
 		
-##############################################################################################
-# Following is a porter stemmer implementation that was freely available on the internet.
-# I included this in this file to simplify the text_cleaner tool.
-##############################################################################################
-##################################### START ##################################################
+##########################################################################
+# Following is a porter stemmer implementation that was freely available 
+# on the internet. I included this in this file to simplify the 
+# text_helpers tool.
+##########################################################################
+################# START ##################################################
 """Porter Stemming Algorithm
 This is the Porter stemming algorithm, ported to Python from the
 version coded up in ANSI C by the author. It may be be regarded
@@ -447,31 +577,103 @@ class PorterStemmer:
 		self.step4()
 		self.step5()
 		return self.b[self.k0:self.k+1]
-######################################### END ################################################
-##############################################################################################
+######################## END #############################################
+##########################################################################
 
 if __name__ == "__main__":
-	parser = argparse.ArgumentParser(prog='./text_cleaner.py', description="Cleans* text files. \n*cleaning means lowercasing, removing punctuation and stopwords, stemming, counting, sorting, and removing words with a low occurrence.")
-	parser.add_argument('-o', '--output-format', dest='output_format', help='specifies output format. Default is a space between words. Options are: space, tab, newline.', metavar='[space|tab|newline]', default='space')
-	parser.add_argument('-L', '--line-mode', action='store_true', default=False, dest='line_mode', help='Output the words in line mode. Lines are preserved. Using this option nullifies the output format options specified.')
-	parser.add_argument('-x', '--remove', dest='remove', default=[], nargs='+', help='removes one, many, or all of the following (whichever are specified): stopwords, punctuation, words, numbers. If "words" is specified for removal, then the --word-count or -w argument must also be given.', metavar='[stopwords,punctuation,words,numbers,blanklines]')
-	parser.add_argument('--stopword-file', dest='stopword_file', default='', help="use the specified file for stopwords. If this option in used the '--remove=stopword' option is assumed.", metavar="FILE")
-	parser.add_argument('--dict-file', dest='dict_file', default='', help="use the specified file for dictionary words. If this options is specified only words found in the dictionary will be used.", metavar="FILE")
-	parser.add_argument('--punct-file', dest='punct_file', default='', help="use the specified file for punctuation. If this options is specified only words found in the dictionary will be used.", metavar="FILE")
-	parser.add_argument('-l', '--lowercase', action='store_true', default=False, dest='lowercase', help='lowercase words.')
-	parser.add_argument('-s', '--stem-words', action='store_true', default=False, dest='stem', help='stem the words (using a porter stemmer).')
-	parser.add_argument("-i", "--input-file", dest="input_file", nargs='?', type=argparse.FileType('r'), default=sys.stdin, help="input file", metavar="FILE")
+	parser = argparse.ArgumentParser(
+				prog='./text_cleaner.py', 
+				description="""Cleans* text. \n*cleaning means 
+							lowercasing, removing things from strings, 
+							and stemming.""")
+	parser.add_argument('--stopword-file', 
+				dest='stopword_file', 
+				default='', 
+				help="""use the specified file for stopwords. If specified, 
+						stopwords will be removed and replaced with nothing.""", 
+				metavar="FILE")
+	parser.add_argument('--dict-file', 
+				dest='dict_file', 
+				default='', 
+				help="""use the specified file for dictionary words. If this 
+						options is specified only words found in the dictionary 
+						will be used.""", 
+				metavar="FILE")
+	parser.add_argument('--punct-file', 
+				dest='punct_file', 
+				default='', 
+				help="""use the specified file for punctuation. If specified,
+						punctuation is removed and replaced with a space.""", 
+				metavar="FILE")
+	parser.add_argument('--apost-file', 
+				dest='apost_file', 
+				default='', 
+				help="""use the specified file for apostrophes. If specified, 
+						apostrophes are remove and replaced with nothing.""", 
+				metavar="FILE")
+	parser.add_argument('--art-file', 
+				dest='article_file', 
+				default='', 
+				help="""use the specified file for articles. If specified, the
+						articles will be removed from the front of strings and
+						replaced with nothing.""", 
+				metavar="FILE")
+	parser.add_argument('-d', 
+				'--output-delimiter', 
+				dest='output_delimiter', 
+				help="""Specifies output delimiter. Default is a space between 
+						words.""", 
+				default=' ')
+	parser.add_argument('-L', 
+				'--line-mode', 
+				action='store_true', 
+				default=False, 
+				dest='line_mode', 
+				help="""Output the words in line mode. Lines are preserved. 
+						Using this option nullifies the output delimiter options 
+						specified.""")
+	parser.add_argument('-x', 
+				'--remove', 
+				dest='remove', 
+				default=[], 
+				nargs='+', 
+				help="""removes one, many, or all of the following (whichever 
+						are specified): stopwords, punctuation, words, numbers.
+						If "words" is specified for removal, then the 
+						--word-count or -w argument must also be given.""", 
+				metavar='[stopwords,punctuation,words,numbers,blanklines]')
+	parser.add_argument('-l', 
+				'--lowercase', 
+				action='store_true', 
+				default=False, 
+				dest='lowercase', 
+				help='lowercase words.')
+	parser.add_argument('-s', 
+				'--stem-words', 
+				action='store_true', 
+				default=False, 
+				dest='stem', 
+				help='stem the words (using a porter stemmer).')
+	parser.add_argument("-i", 
+				"--input-file", 
+				dest="input_file", 
+				nargs='?', 
+				type=argparse.FileType('r'), 
+				default=sys.stdin, 
+				help="input file", 
+				metavar="FILE")
 
 	args = parser.parse_args()
 
-	contentList = (line.strip().lower() if args.lowercase else line.strip() for line in args.input_file)
+	contentList = (line.strip().lower() if args.lowercase else line.strip() 
+					for line in args.input_file)
 
 	output = []
 
-	delimiters = {'space':" ", 'tab':"\t", 'newline':"\n"}
-	outputDelimiter = delimiters[args.output_format]
+	outputDelimiter = args.output_delimiter
 
-	cleaner = Words(args.stopword_file, args.dict_file, args.punct_file)
+	cleaner = Remover(args.stopword_file, args.dict_file, 
+					args.punct_file, args.apost_file, args.article_file)
 	stemmer = PorterStemmer()
 
 	if args.line_mode:
@@ -498,17 +700,29 @@ if __name__ == "__main__":
 
 	else: # word mode
 		output = " ".join(contentList)
-		if 'numbers' in args.remove:
+		if args.articles:
+			output = cleaner.removeArticlesFromFront(output)
+
+		if args.numbers:
 			output = cleaner.removeNumbers(output)
 
-		if 'punctuation' in args.remove:
+		if args.apostrophes:
+			output = cleaner.removeApostrophes(output)
+
+		if args.tags:
+			output = cleaner.removeTags(output)
+
+		if args.punctuation:
 			output = cleaner.removePunctuation(output)
 
-		if 'stopwords' in args.remove:
+		if args.stopwords:
 			output = cleaner.removeStopwords(output)
 
-		if 'words' in args.remove:
+		if args.words:
 			output = cleaner.removeNonDictionaryWords(output)
+
+		if args.spaces:
+			output = cleaner.removeExtraSpaces(output)
 
 		if args.stem:
 			output = stemmer.stemWords(output)
