@@ -109,7 +109,7 @@ class Remover:
 		self._punctuation = ['!', "\"", '#', '\$','%','&',"'",'\(','\)','\*','\+',
 						',', '-','\.','/',"\\\\",':',';','\<','\=','\>','\?',
 						'@','\[', '\|','\]','\^','_','`','{','}','~','¡','¿',
-						'—','–','…','�', '”','“','‘','’','´','¯','•','→']
+						'—','–','…','�', '”','“','‘','’','´','¯','•','→','®']
 		self._articles = ['a', 'an', 'and', 'the']
 		self._apostrophe = ["'", "‘","’"]
 
@@ -204,7 +204,7 @@ class Remover:
 
 	def removeApostrophesLine(self, wordLines):
 		"""Remove apostrophes from string, replace with no space."""
-		return self._
+		return self._doPerLine(wordLines, self.removeApostrophes)
 
 	# private interface
 	def _doPerLine(self, lines, function):
@@ -632,16 +632,48 @@ if __name__ == "__main__":
 				help="""Output the words in line mode. Lines are preserved. 
 						Using this option nullifies the output delimiter options 
 						specified.""")
-	parser.add_argument('-x', 
-				'--remove', 
-				dest='remove', 
-				default=[], 
-				nargs='+', 
-				help="""removes one, many, or all of the following (whichever 
-						are specified): stopwords, punctuation, words, numbers.
-						If "words" is specified for removal, then the 
-						--word-count or -w argument must also be given.""", 
-				metavar='[stopwords,punctuation,words,numbers,blanklines]')
+
+	parser.add_argument('-A', '--remove-articles', 
+				dest='articles', 
+				action='store_true', 
+				default=False, 
+				help="""Remove articles from the beginning of lines.""")
+	parser.add_argument('-n', '--remove-numbers', 
+				dest='numbers', 
+				action='store_true', 
+				default=False, 
+				help="""Remove numbers.""")
+	parser.add_argument('-a', '--remove-apostrophes', 
+				dest='apostrophes', 
+				action='store_true', 
+				default=False, 
+				help="""Remove apostrophes and replaced with nothing.""")
+	parser.add_argument('-t', '--remove-tags', 
+				dest='tags', 
+				action='store_true', 
+				default=False, 
+				help="""Remove html/xml tags.""")
+	parser.add_argument('-p', '--remove-punctuation', 
+				dest='punctuation', 
+				action='store_true', 
+				default=False, 
+				help="""Remove punctuation replacing with a space.""")
+	parser.add_argument('-S', '--remove-stopwords', 
+				dest='stopwords', 
+				action='store_true', 
+				default=False, 
+				help="""Remove stopwords.""")
+	parser.add_argument('-w', '--remove-words', 
+				dest='words', 
+				action='store_true', 
+				default=False, 
+				help="""Remove non-dictionary words.""")
+	parser.add_argument('-e', '--remove-spaces',
+				dest='spaces', 
+				action='store_true', 
+				default=False, 
+				help="""Remove extra spaces.""")
+
 	parser.add_argument('-l', 
 				'--lowercase', 
 				action='store_true', 
@@ -664,7 +696,18 @@ if __name__ == "__main__":
 				metavar="FILE")
 
 	args = parser.parse_args()
-
+	
+	if args.stopword_file != '':
+		args.stopwords = True
+	if args.dict_file != '':
+		args.words = True
+	if args.punct_file != '':
+		args.punctuation = True
+	if args.apost_file != '':
+		args.apostrophes = True
+	if args.article_file != '':
+		args.articles = True
+		
 	contentList = (line.strip().lower() if args.lowercase else line.strip() 
 					for line in args.input_file)
 
@@ -677,24 +720,33 @@ if __name__ == "__main__":
 	stemmer = PorterStemmer()
 
 	if args.line_mode:
-		for line in contentList:
-			if line.strip() == '' and 'blanklines' in args.remove: continue
-			if 'numbers' in args.remove:
-				line = cleaner.removeNumbers(line)
+		output = contentList
+		if args.articles:
+			output = cleaner.removeArticlesFromFrontLine(output)
 
-			if 'punctuation' in args.remove:
-				line = cleaner.removePunctuation(line)
+		if args.numbers:
+			output = cleaner.removeNumbersLine(output)
 
-			if 'stopwords' in args.remove:
-				line = cleaner.removeStopwords(line)
+		if args.apostrophes:
+			output = cleaner.removeApostrophesLine(output)
 
-			if 'words' in args.remove:
-				line = cleaner.removeNonDictionaryWords(line)
+		if args.tags:
+			output = cleaner.removeTagsLine(output)
 
-			if args.stem:
-				line = stemmer.stemWords(line)
+		if args.punctuation:
+			output = cleaner.removePunctuationLine(output)
 
-			output.append(line)
+		if args.stopwords:
+			output = cleaner.removeStopwordsLine(output)
+
+		if args.words:
+			output = cleaner.removeNonDictionaryWordsLine(output)
+
+		if args.spaces:
+			output = cleaner.removeExtraSpacesLine(output)
+
+		if args.stem:
+			output = stemmer.stemWordsLine(output)
 
 		sys.stdout.write("\n".join(output) + "\n")
 
@@ -733,5 +785,5 @@ if __name__ == "__main__":
 				rtnOutput.append(word.strip())
 
 		output = " ".join(rtnOutput)
-		sys.stdout.write(outputDelimiter.join(output.split(" ")))
+		sys.stdout.write(outputDelimiter.join(output.split(" "))+"\n")
 
