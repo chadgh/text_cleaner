@@ -200,7 +200,7 @@ class Remover:
 
 	def removeApostrophes(self, words):
 		"""Remove apostrophes from string, replace with no space."""
-		return self.__apostropheRege.sub('', words)
+		return self.__apostropheRegex.sub('', words)
 
 	def removeApostrophesLine(self, wordLines):
 		"""Remove apostrophes from string, replace with no space."""
@@ -623,7 +623,8 @@ if __name__ == "__main__":
 				dest='output_delimiter', 
 				help="""Specifies output delimiter. Default is a space between 
 						words.""", 
-				default=' ')
+				default='space',
+				metavar="[space|newline|tab|(characters)]")
 	parser.add_argument('-L', 
 				'--line-mode', 
 				action='store_true', 
@@ -713,7 +714,8 @@ if __name__ == "__main__":
 
 	output = []
 
-	outputDelimiter = args.output_delimiter
+	delimiters = {'space':' ', 'newline': "\n", 'tab': "\t"}
+	outputDelimiter = args.output_delimiter if args.output_delimiter not in delimiters else delimiters[args.output_delimiter]
 
 	cleaner = Remover(args.stopword_file, args.dict_file, 
 					args.punct_file, args.apost_file, args.article_file)
